@@ -1,0 +1,2220 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChronoBeat — Music-Reactive Countdown Studio</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono for crisp tabular digits -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    /* Base setup & custom scrollbars */
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background-color: #07070c;
+      color: #ffffff;
+      overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Glassmorphic surface utility */
+    .glass-panel {
+      background: rgba(15, 16, 26, 0.58);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+      will-change: transform, box-shadow, border-color;
+    }
+
+    /* Custom sleek range slider */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.14);
+      height: 6px;
+      border-radius: 999px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #ffffff;
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.7);
+      transition: transform 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    /* Custom color input styling */
+    input[type="color"] {
+      -webkit-appearance: none;
+      border: none;
+      padding: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+    input[type="color"]::-webkit-color-swatch {
+      border: 2px solid rgba(255, 255, 255, 0.25);
+      border-radius: 10px;
+    }
+
+    /* Dark native datetime picker icon tweak */
+    input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+      cursor: pointer;
+      opacity: 0.8;
+    }
+
+    /* Custom subtle scrollbar for drawers/modals */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.18);
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.32);
+    }
+
+    @keyframes floatSlow {
+      0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+      50% { transform: translate3d(18px, -22px, 0) scale(1.05); }
+    }
+    .animate-float-slow {
+      animation: floatSlow 12s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="font-sans antialiased selection:bg-pink-500 selection:text-white">
+
+  <!-- =====================================================================
+       DYNAMIC GRADIENT BACKGROUND & AMBIENT ORBS
+  ====================================================================== -->
+  <div id="bg-gradient-layer" class="fixed inset-0 z-0 transition-all duration-700" style="background: linear-gradient(135deg, #ff007f 0%, #7928ca 50%, #00d4ff 100%);"></div>
+  <!-- Dark atmospheric vignette for ultra-legible contrast -->
+  <div class="fixed inset-0 z-0 bg-gradient-to-b from-black/55 via-black/45 to-black/75 pointer-events-none"></div>
+
+  <!-- Beat-Reactive Ambient Orbs -->
+  <div id="orb-1" class="fixed -top-24 -left-24 w-80 h-80 sm:w-[28rem] sm:h-[28rem] rounded-full blur-3xl opacity-45 pointer-events-none z-0 transition-transform duration-75" style="background: #ff007f;"></div>
+  <div id="orb-2" class="fixed top-1/3 -right-24 w-80 h-80 sm:w-[30rem] sm:h-[30rem] rounded-full blur-3xl opacity-40 pointer-events-none z-0 transition-transform duration-75" style="background: #00d4ff;"></div>
+  <div id="orb-3" class="fixed -bottom-28 left-1/3 w-72 h-72 sm:w-[26rem] sm:h-[26rem] rounded-full blur-3xl opacity-35 pointer-events-none z-0 transition-transform duration-75" style="background: #7928ca;"></div>
+
+  <!-- =====================================================================
+       HTML5 CANVAS VISUALIZER LAYER (Shockwaves, Particles, Equalizer Ring)
+  ====================================================================== -->
+  <canvas id="visualizer-canvas" class="fixed inset-0 w-full h-full pointer-events-none z-10"></canvas>
+
+  <!-- =====================================================================
+       MAIN APPLICATION SHELL
+  ====================================================================== -->
+  <div class="relative z-20 min-h-screen flex flex-col justify-between px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
+
+    <!-- TOP HEADER BAR -->
+    <header class="w-full max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-2.5">
+        <div id="brand-pulse-badge" class="w-10 h-10 rounded-xl glass-card flex items-center justify-center shadow-lg">
+          <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <polyline points="12 7 12 12 15 14" />
+            <path d="M19 3v4M21 5h-4" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold tracking-tight text-lg sm:text-xl text-white">ChronoBeat</span>
+            <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white/15 text-white/90 border border-white/15">Live Sync</span>
+          </div>
+          <p class="text-[11px] text-white/65 hidden sm:block">Music-Reactive Countdown Studio</p>
+        </div>
+      </div>
+
+      <!-- Top Action Controls -->
+      <div class="flex items-center gap-2 sm:gap-2.5">
+        <!-- My Countdowns Drawer Toggle -->
+        <button id="btn-open-drawer" type="button" class="glass-panel hover:bg-white/15 active:scale-95 transition-all px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 text-white">
+          <svg class="w-4 h-4 text-white/85" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"></line>
+            <line x1="8" y1="12" x2="21" y2="12"></line>
+            <line x1="8" y1="18" x2="21" y2="18"></line>
+            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+          </svg>
+          <span>My Countdowns</span>
+          <span id="saved-count-badge" class="px-1.5 py-0.5 text-[11px] rounded-md bg-white/15 font-mono font-bold">2</span>
+        </button>
+
+        <!-- Edit Current Countdown -->
+        <button id="btn-edit-current" type="button" title="Customize Current Countdown" class="glass-panel hover:bg-white/15 active:scale-95 transition-all p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1.5 text-white">
+          <svg class="w-4 h-4 text-white/85" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+          </svg>
+          <span class="hidden md:inline">Customize</span>
+        </button>
+
+        <!-- Share Link Button -->
+        <button id="btn-share-link" type="button" class="glass-panel hover:bg-white/15 active:scale-95 transition-all px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1.5 text-white">
+          <svg class="w-4 h-4 text-emerald-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3"></circle>
+            <circle cx="6" cy="12" r="3"></circle>
+            <circle cx="18" cy="19" r="3"></circle>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+          </svg>
+          <span>Share</span>
+        </button>
+
+        <!-- Create New Countdown CTA -->
+        <button id="btn-new-countdown" type="button" class="bg-white text-slate-950 hover:bg-white/90 active:scale-95 transition-all px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-lg shadow-black/25">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>Create</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- SHARED COUNTDOWN BANNER (Shown when opened via #c=... link) -->
+    <div id="shared-banner" class="hidden w-full max-w-xl mx-auto mt-3">
+      <div class="glass-panel rounded-2xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 border-emerald-400/40 bg-emerald-950/35">
+        <div class="flex items-center gap-2 text-xs sm:text-sm">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          <span class="font-medium text-white/95">Viewing a shared ChronoBeat link</span>
+        </div>
+        <button id="btn-save-shared" type="button" class="px-3 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs transition-all active:scale-95 flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+            <polyline points="7 3 7 8 15 8"></polyline>
+          </svg>
+          <span>Save to My Countdowns</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ===================================================================
+         CENTER STAGE: COUNTDOWN DISPLAY & BEAT-REACTIVE TYPOGRAPHY
+    ==================================================================== -->
+    <main id="countdown-stage" class="w-full max-w-5xl mx-auto my-auto py-6 sm:py-10 flex flex-col items-center text-center select-none">
+
+      <!-- Target Date & Live Beat Status Pill -->
+      <div class="glass-panel px-4 py-1.5 rounded-full inline-flex items-center gap-2.5 mb-5">
+        <span id="beat-led" class="w-2.5 h-2.5 rounded-full bg-pink-400 shadow-[0_0_10px_#f472b6] transition-transform duration-75"></span>
+        <span id="display-target-date" class="text-xs sm:text-sm font-semibold tracking-wide text-white/90 uppercase">Loading target...</span>
+        <span class="text-white/30">•</span>
+        <span id="display-bpm-badge" class="text-xs font-mono font-bold text-white/80">128 BPM</span>
+      </div>
+
+      <!-- Event Title & Subtitle -->
+      <div id="title-wrapper" class="max-w-3xl mx-auto mb-7 sm:mb-10 px-2 transition-transform duration-75">
+        <h1 id="display-title" class="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tight text-white drop-shadow-[0_6px_28px_rgba(0,0,0,0.45)] leading-[1.08]">
+          New Year 2027 Drop
+        </h1>
+        <p id="display-subtitle" class="mt-3 text-sm sm:text-lg md:text-xl font-medium text-white/80 max-w-2xl mx-auto">
+          Turn up the volume and feel every second pulse to the beat
+        </p>
+      </div>
+
+      <!-- ACTIVE COUNTDOWN GRID (4 Tabular Digit Cards) -->
+      <div id="timer-grid" class="w-full max-w-4xl grid grid-cols-4 gap-2.5 sm:gap-5 md:gap-6 px-1">
+        <!-- DAYS -->
+        <div id="card-days" class="glass-card rounded-2xl sm:rounded-3xl p-3 sm:p-6 md:p-8 flex flex-col items-center justify-center relative overflow-hidden">
+          <span id="val-days" class="font-mono font-extrabold text-3xl sm:text-6xl md:text-7xl lg:text-8xl tracking-tight tabular-nums text-white leading-none">00</span>
+          <span class="mt-2 sm:mt-3 text-[10px] sm:text-xs md:text-sm font-bold uppercase tracking-[0.2em] text-white/65">Days</span>
+        </div>
+
+        <!-- HOURS -->
+        <div id="card-hours" class="glass-card rounded-2xl sm:rounded-3xl p-3 sm:p-6 md:p-8 flex flex-col items-center justify-center relative overflow-hidden">
+          <span id="val-hours" class="font-mono font-extrabold text-3xl sm:text-6xl md:text-7xl lg:text-8xl tracking-tight tabular-nums text-white leading-none">00</span>
+          <span class="mt-2 sm:mt-3 text-[10px] sm:text-xs md:text-sm font-bold uppercase tracking-[0.2em] text-white/65">Hours</span>
+        </div>
+
+        <!-- MINUTES -->
+        <div id="card-minutes" class="glass-card rounded-2xl sm:rounded-3xl p-3 sm:p-6 md:p-8 flex flex-col items-center justify-center relative overflow-hidden">
+          <span id="val-minutes" class="font-mono font-extrabold text-3xl sm:text-6xl md:text-7xl lg:text-8xl tracking-tight tabular-nums text-white leading-none">00</span>
+          <span class="mt-2 sm:mt-3 text-[10px] sm:text-xs md:text-sm font-bold uppercase tracking-[0.2em] text-white/65">Minutes</span>
+        </div>
+
+        <!-- SECONDS -->
+        <div id="card-seconds" class="glass-card rounded-2xl sm:rounded-3xl p-3 sm:p-6 md:p-8 flex flex-col items-center justify-center relative overflow-hidden">
+          <span id="val-seconds" class="font-mono font-extrabold text-3xl sm:text-6xl md:text-7xl lg:text-8xl tracking-tight tabular-nums text-white leading-none">00</span>
+          <span class="mt-2 sm:mt-3 text-[10px] sm:text-xs md:text-sm font-bold uppercase tracking-[0.2em] text-white/65">Seconds</span>
+        </div>
+      </div>
+
+      <!-- COMPLETION CELEBRATION STATE (Shown when timer hits 00:00:00:00) -->
+      <div id="celebration-panel" class="hidden w-full max-w-2xl mx-auto mt-6 glass-panel rounded-3xl p-6 sm:p-8 border-white/25 text-center">
+        <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/15 text-xs font-extrabold uppercase tracking-widest text-amber-300 mb-3">
+          <span>Countdown Complete</span>
+        </div>
+        <h2 class="text-2xl sm:text-4xl font-black text-white tracking-tight">The Moment Has Arrived!</h2>
+        <p class="mt-2 text-sm sm:text-base text-white/75">Keep the music rolling or set a new target time to start another countdown.</p>
+        <div class="mt-5 flex flex-wrap items-center justify-center gap-3">
+          <button id="btn-celebration-edit" type="button" class="px-5 py-2.5 rounded-xl bg-white text-slate-950 font-bold text-sm hover:bg-white/90 transition-all active:scale-95">
+            Set New Target Time
+          </button>
+          <button id="btn-celebration-burst" type="button" class="px-5 py-2.5 rounded-xl glass-card font-bold text-sm text-white hover:bg-white/15 transition-all active:scale-95">
+            Launch Fireworks
+          </button>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ===================================================================
+         BOTTOM STAGE HUD: BEAT SYNC ENGINE & FLOATING SPOTIFY PLAYER DOCK
+    ==================================================================== -->
+    <footer class="w-full max-w-7xl mx-auto flex flex-col lg:flex-row items-stretch lg:items-end justify-between gap-4 pt-2">
+
+      <!-- LEFT/CENTER: AUDIO & BEAT REACTION CONTROL BAR -->
+      <div class="glass-panel rounded-2xl p-3 sm:p-3.5 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 lg:max-w-3xl">
+
+        <!-- Visual Effect Mode Selector -->
+        <div class="flex items-center gap-1.5 bg-black/30 p-1 rounded-xl border border-white/10 overflow-x-auto">
+          <button type="button" data-effect="shockwave" class="effect-btn px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all bg-white text-slate-950 shadow">
+            Shockwave
+          </button>
+          <button type="button" data-effect="bounce" class="effect-btn px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-white/75 hover:text-white">
+            Kinetic Bounce
+          </button>
+          <button type="button" data-effect="aurora" class="effect-btn px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-white/75 hover:text-white">
+            Aurora Pulse
+          </button>
+          <button type="button" data-effect="equalizer" class="effect-btn px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-white/75 hover:text-white">
+            Equalizer Ring
+          </button>
+        </div>
+
+        <!-- BPM Slider + Tap Tempo -->
+        <div class="flex items-center gap-2.5 px-1">
+          <div class="flex items-center gap-2 flex-1 sm:flex-initial">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-white/60">BPM</span>
+            <input id="stage-bpm-slider" type="range" min="60" max="180" value="128" class="w-24 sm:w-28" />
+            <span id="stage-bpm-value" class="font-mono text-xs font-bold w-8 text-right">128</span>
+          </div>
+
+          <button id="btn-tap-tempo" type="button" title="Tap along to the song beat to sync tempo" class="px-3 py-1.5 rounded-xl bg-white/12 hover:bg-white/20 active:scale-90 border border-white/15 text-xs font-bold text-white transition-all flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+            <span>Tap Tempo</span>
+          </button>
+        </div>
+
+        <!-- Live Mic / System Audio Web Audio API Sync Button -->
+        <button id="btn-live-audio" type="button" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-pink-500/80 to-violet-600/80 hover:from-pink-500 hover:to-violet-600 border border-white/20 text-xs font-bold text-white transition-all active:scale-95 flex items-center justify-center gap-2 shadow-md">
+          <svg id="mic-icon" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+          <span id="live-audio-label">Live Audio Sync</span>
+        </button>
+      </div>
+
+      <!-- RIGHT: FLOATING SPOTIFY PLAYER DOCK -->
+      <div id="spotify-dock" class="glass-panel rounded-2xl overflow-hidden w-full lg:w-[370px] flex-shrink-0 transition-all duration-300">
+        <!-- Dock Header Bar -->
+        <div class="px-3.5 py-2 bg-black/35 border-b border-white/10 flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <!-- Spotify SVG Icon -->
+            <svg class="w-4 h-4 text-[#1DB954] flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+            </svg>
+            <span id="spotify-dock-status" class="text-xs font-semibold text-white/90 truncate">Spotify Soundtrack</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button id="btn-change-track" type="button" class="text-[11px] font-semibold px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white/85 transition-colors">
+              Change
+            </button>
+            <button id="btn-toggle-spotify" type="button" title="Minimize / Expand Player" class="p-1 rounded-lg hover:bg-white/15 text-white/75 hover:text-white transition-colors">
+              <svg id="spotify-chevron" class="w-4 h-4 transition-transform duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Spotify Iframe Container (Kept mounted when minimized so playback continues) -->
+        <div id="spotify-embed-wrapper" class="p-2 bg-black/25 transition-all duration-300">
+          <iframe
+            id="spotify-iframe"
+            class="w-full rounded-xl border-0"
+            style="height: 80px;"
+            src="https://open.spotify.com/embed/track/1eyzqe2QqGZUmfcPZtrIyt?utm_source=generator&theme=0"
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            loading="lazy"
+            title="Spotify Soundtrack Player">
+          </iframe>
+        </div>
+      </div>
+
+    </footer>
+  </div>
+
+  <!-- =====================================================================
+       SLIDE-OVER DRAWER: MY SAVED COUNTDOWNS (LocalStorage)
+  ====================================================================== -->
+  <div id="drawer-backdrop" class="fixed inset-0 z-40 bg-black/65 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300"></div>
+  <aside id="countdowns-drawer" class="fixed top-0 left-0 bottom-0 z-50 w-full max-w-md glass-panel border-r border-white/15 transform -translate-x-full transition-transform duration-300 flex flex-col">
+    <div class="p-5 border-b border-white/10 flex items-center justify-between">
+      <div>
+        <h2 class="text-lg font-extrabold text-white tracking-tight">My Countdowns</h2>
+        <p class="text-xs text-white/60">Stored locally in your browser</p>
+      </div>
+      <button id="btn-close-drawer" type="button" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Saved Countdowns List -->
+    <div id="saved-countdowns-list" class="flex-1 overflow-y-auto p-4 space-y-3">
+      <!-- Dynamically populated -->
+    </div>
+
+    <div class="p-4 border-t border-white/10 bg-black/25">
+      <button id="btn-drawer-create" type="button" class="w-full py-3 rounded-xl bg-white text-slate-950 font-bold text-sm hover:bg-white/90 transition-all active:scale-98 flex items-center justify-center gap-2 shadow-lg">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span>Create New Countdown</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- =====================================================================
+       MODAL: COUNTDOWN CREATOR & EDITOR STUDIO
+  ====================================================================== -->
+  <div id="creator-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-md overflow-y-auto">
+    <div class="glass-panel w-full max-w-2xl rounded-3xl border border-white/15 overflow-hidden my-auto shadow-2xl">
+      <!-- Modal Header -->
+      <div class="px-5 py-4 sm:px-6 border-b border-white/10 flex items-center justify-between bg-white/[0.03]">
+        <div>
+          <h2 id="modal-heading" class="text-lg sm:text-xl font-extrabold text-white tracking-tight">Create Countdown</h2>
+          <p class="text-xs text-white/60">Customize gradient, Spotify soundtrack, and beat physics</p>
+        </div>
+        <button id="btn-close-modal" type="button" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Modal Form Body -->
+      <form id="countdown-form" class="p-5 sm:p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+        <input type="hidden" id="form-countdown-id" value="" />
+
+        <!-- 1. EVENT TITLE, SUBTITLE & TARGET DATE -->
+        <div class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <label for="input-title" class="block text-xs font-bold uppercase tracking-wider text-white/75 mb-1.5">Countdown Title *</label>
+              <input id="input-title" type="text" required maxlength="60" placeholder="e.g., Album Release Party" class="w-full px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/15 text-white placeholder-white/40 text-sm focus:outline-none focus:border-white/50" />
+            </div>
+            <div>
+              <label for="input-subtitle" class="block text-xs font-bold uppercase tracking-wider text-white/75 mb-1.5">Subtitle / Tagline</label>
+              <input id="input-subtitle" type="text" maxlength="90" placeholder="Optional hype message..." class="w-full px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/15 text-white placeholder-white/40 text-sm focus:outline-none focus:border-white/50" />
+            </div>
+          </div>
+
+          <div>
+            <label for="input-datetime" class="block text-xs font-bold uppercase tracking-wider text-white/75 mb-1.5">Target Date & Time *</label>
+            <input id="input-datetime" type="datetime-local" required class="w-full px-3.5 py-2.5 rounded-xl bg-white/10 border border-white/15 text-white text-sm focus:outline-none focus:border-white/50" />
+            <!-- Quick-Set Date Chips -->
+            <div class="flex flex-wrap gap-1.5 mt-2">
+              <button type="button" data-quick-time="15m" class="quick-time-chip px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-semibold text-white/85 transition-colors">+15 Mins</button>
+              <button type="button" data-quick-time="1h" class="quick-time-chip px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-semibold text-white/85 transition-colors">+1 Hour</button>
+              <button type="button" data-quick-time="midnight" class="quick-time-chip px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-semibold text-white/85 transition-colors">Tonight Midnight</button>
+              <button type="button" data-quick-time="friday" class="quick-time-chip px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-semibold text-white/85 transition-colors">Next Friday 8PM</button>
+              <button type="button" data-quick-time="newyear" class="quick-time-chip px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-semibold text-white/85 transition-colors">New Year</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. COLOR GRADIENT STUDIO -->
+        <div class="space-y-3 pt-2 border-t border-white/10">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold uppercase tracking-wider text-white/75">Color Gradient Studio</label>
+            <span id="gradient-angle-label" class="text-xs font-mono text-white/70">135°</span>
+          </div>
+
+          <!-- Live Gradient Preview Banner -->
+          <div id="modal-gradient-preview" class="w-full h-14 rounded-2xl border border-white/20 flex items-center justify-center shadow-inner transition-all duration-300" style="background: linear-gradient(135deg, #ff007f, #7928ca, #00d4ff);">
+            <span class="px-3 py-1 rounded-lg bg-black/35 backdrop-blur-md text-xs font-bold tracking-wide text-white">Live Backdrop Preview</span>
+          </div>
+
+          <!-- 8 Curated Gradient Presets -->
+          <div id="gradient-presets-grid" class="grid grid-cols-4 sm:grid-cols-8 gap-2">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Custom 3-Stop Color Pickers & Angle Slider -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div class="flex items-center gap-2.5 bg-white/5 p-2.5 rounded-xl border border-white/10">
+              <div class="flex flex-col items-center gap-1 flex-1">
+                <input id="color-stop-1" type="color" value="#ff007f" class="w-full h-8" />
+                <span class="text-[10px] text-white/60 font-mono">Stop 1</span>
+              </div>
+              <div class="flex flex-col items-center gap-1 flex-1">
+                <input id="color-stop-2" type="color" value="#7928ca" class="w-full h-8" />
+                <span class="text-[10px] text-white/60 font-mono">Stop 2</span>
+              </div>
+              <div class="flex flex-col items-center gap-1 flex-1">
+                <input id="color-stop-3" type="color" value="#00d4ff" class="w-full h-8" />
+                <span class="text-[10px] text-white/60 font-mono">Stop 3</span>
+              </div>
+            </div>
+
+            <div class="flex flex-col justify-center bg-white/5 p-3 rounded-xl border border-white/10">
+              <div class="flex justify-between text-xs mb-1.5">
+                <span class="text-white/70 font-medium">Gradient Angle</span>
+                <span id="angle-val-display" class="font-mono font-bold text-white">135°</span>
+              </div>
+              <input id="input-gradient-angle" type="range" min="0" max="360" value="135" class="w-full" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. SPOTIFY SOUNDTRACK PICKER (Link/URI + Quick Vibes + OAuth PKCE Connect) -->
+        <div class="space-y-3 pt-2 border-t border-white/10">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <label class="text-xs font-bold uppercase tracking-wider text-white/75 flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-[#1DB954]" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+              </svg>
+              <span>Spotify Soundtrack (Song, Playlist, or Album)</span>
+            </label>
+
+            <!-- Spotify Mode Switcher Tabs -->
+            <div class="flex bg-black/35 p-1 rounded-xl border border-white/10">
+              <button type="button" id="tab-spotify-link" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white text-slate-950 transition-all">Paste Link / Quick Pick</button>
+              <button type="button" id="tab-spotify-oauth" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-white/75 hover:text-white transition-all">Connect Spotify API</button>
+            </div>
+          </div>
+
+          <!-- TAB A: Direct Link / URI & Quick Picks -->
+          <div id="panel-spotify-link" class="space-y-3">
+            <div>
+              <div class="relative">
+                <input id="input-spotify-url" type="text" placeholder="Paste Spotify Track, Playlist, or Album URL or URI..." class="w-full px-3.5 py-2.5 pr-24 rounded-xl bg-white/10 border border-white/15 text-white placeholder-white/40 text-sm focus:outline-none focus:border-[#1DB954]" />
+                <span id="spotify-parsed-badge" class="absolute right-2.5 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-md bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/30 text-[10px] font-bold uppercase">Track</span>
+              </div>
+              <p class="text-[11px] text-white/55 mt-1">Supports <code class="text-white/80">open.spotify.com/track/...</code>, <code class="text-white/80">/playlist/...</code>, <code class="text-white/80">/album/...</code>, or <code class="text-white/80">spotify:...</code></p>
+            </div>
+
+            <!-- 4 Curated One-Click Spotify Demo Vibes -->
+            <div>
+              <span class="block text-[11px] font-semibold text-white/60 mb-1.5">Quick-Pick Demo Soundtracks:</span>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button type="button" data-sp-type="track" data-sp-id="1eyzqe2QqGZUmfcPZtrIyt" data-sp-bpm="105" class="quick-sp-btn text-left p-2.5 rounded-xl bg-white/5 hover:bg-white/12 border border-white/10 transition-all flex items-center justify-between gap-2">
+                  <div class="min-w-0">
+                    <div class="text-xs font-bold text-white truncate">Midnight City — M83</div>
+                    <div class="text-[10px] text-white/55">Track • 105 BPM • Synth Anthem</div>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-[#1DB954]/20 text-[#1DB954] text-[10px] font-bold">Track</span>
+                </button>
+
+                <button type="button" data-sp-type="track" data-sp-id="0VjIjW4GlUZAMYd2vXMi3b" data-sp-bpm="171" class="quick-sp-btn text-left p-2.5 rounded-xl bg-white/5 hover:bg-white/12 border border-white/10 transition-all flex items-center justify-between gap-2">
+                  <div class="min-w-0">
+                    <div class="text-xs font-bold text-white truncate">Blinding Lights — The Weeknd</div>
+                    <div class="text-[10px] text-white/55">Track • 171 BPM • High Energy</div>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-[#1DB954]/20 text-[#1DB954] text-[10px] font-bold">Track</span>
+                </button>
+
+                <button type="button" data-sp-type="playlist" data-sp-id="37i9dQZF1DX4dyzvuaRJ0n" data-sp-bpm="126" class="quick-sp-btn text-left p-2.5 rounded-xl bg-white/5 hover:bg-white/12 border border-white/10 transition-all flex items-center justify-between gap-2">
+                  <div class="min-w-0">
+                    <div class="text-xs font-bold text-white truncate">mint — Dance & Electronic</div>
+                    <div class="text-[10px] text-white/55">Playlist • 126 BPM • Club Mix</div>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-bold">Playlist</span>
+                </button>
+
+                <button type="button" data-sp-type="album" data-sp-id="4m2880jivSbbyEGAKfITCa" data-sp-bpm="120" class="quick-sp-btn text-left p-2.5 rounded-xl bg-white/5 hover:bg-white/12 border border-white/10 transition-all flex items-center justify-between gap-2">
+                  <div class="min-w-0">
+                    <div class="text-xs font-bold text-white truncate">Random Access Memories</div>
+                    <div class="text-[10px] text-white/55">Album • Daft Punk • 120 BPM</div>
+                  </div>
+                  <span class="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 text-[10px] font-bold">Album</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB B: Connect Spotify Account (Client-Side OAuth 2.0 PKCE + Live Catalog Search) -->
+          <div id="panel-spotify-oauth" class="hidden space-y-3 bg-white/5 p-3.5 rounded-2xl border border-white/10">
+            <div id="spotify-auth-disconnected" class="space-y-2.5">
+              <p class="text-xs text-white/75 leading-relaxed">
+                Connect your Spotify account via client-side <strong class="text-white">OAuth 2.0 PKCE</strong> to search your favorite songs, playlists, and albums directly.
+              </p>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input id="input-spotify-client-id" type="text" placeholder="Spotify App Client ID..." class="sm:col-span-2 px-3 py-2 rounded-xl bg-black/40 border border-white/15 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#1DB954]" />
+                <button id="btn-spotify-pkce-login" type="button" class="px-3 py-2 rounded-xl bg-[#1DB954] hover:bg-[#1ed760] text-slate-950 font-bold text-xs transition-all">
+                  Connect Spotify
+                </button>
+              </div>
+              <div class="flex items-center justify-between gap-2 text-[10px] text-white/55 bg-black/30 px-2.5 py-1.5 rounded-lg">
+                <span class="truncate">Redirect URI: <code id="spotify-redirect-uri-text" class="text-white/80"></code></span>
+                <button id="btn-copy-redirect-uri" type="button" class="text-[#1DB954] font-bold hover:underline flex-shrink-0">Copy URI</button>
+              </div>
+            </div>
+
+            <!-- Connected Live Catalog Search -->
+            <div id="spotify-auth-connected" class="hidden space-y-2.5">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-[#1DB954] flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-[#1DB954]"></span>
+                  Connected to Spotify API
+                </span>
+                <button id="btn-spotify-disconnect" type="button" class="text-[11px] text-white/60 hover:text-white underline">Disconnect</button>
+              </div>
+              <div class="flex gap-2">
+                <input id="input-spotify-search" type="text" placeholder="Search songs, albums, or playlists..." class="flex-1 px-3 py-2 rounded-xl bg-black/40 border border-white/15 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#1DB954]" />
+                <select id="select-spotify-search-type" class="px-2.5 py-2 rounded-xl bg-black/50 border border-white/15 text-xs text-white focus:outline-none">
+                  <option value="track">Tracks</option>
+                  <option value="playlist">Playlists</option>
+                  <option value="album">Albums</option>
+                </select>
+                <button id="btn-spotify-search-go" type="button" class="px-3.5 py-2 rounded-xl bg-[#1DB954] text-slate-950 font-bold text-xs">Search</button>
+              </div>
+              <div id="spotify-search-results" class="max-h-44 overflow-y-auto space-y-1.5 pr-1"></div>
+            </div>
+          </div>
+
+          <!-- Modal Mini Spotify Embed Preview -->
+          <div class="rounded-xl overflow-hidden border border-white/10 bg-black/40">
+            <iframe
+              id="modal-spotify-preview"
+              class="w-full border-0"
+              style="height: 80px;"
+              src="https://open.spotify.com/embed/track/1eyzqe2QqGZUmfcPZtrIyt?utm_source=generator&theme=0"
+              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+              loading="lazy"
+              title="Spotify Preview">
+            </iframe>
+          </div>
+        </div>
+
+        <!-- 4. BEAT TEMPO & REACTION EFFECT -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2 border-t border-white/10">
+          <div>
+            <div class="flex justify-between text-xs mb-1.5">
+              <label for="input-bpm" class="font-bold uppercase tracking-wider text-white/75">Default Tempo (BPM)</label>
+              <span id="modal-bpm-display" class="font-mono font-bold text-white">128 BPM</span>
+            </div>
+            <input id="input-bpm" type="range" min="60" max="180" value="128" class="w-full" />
+          </div>
+
+          <div>
+            <label for="input-effect-mode" class="block text-xs font-bold uppercase tracking-wider text-white/75 mb-1.5">Beat Reaction Mode</label>
+            <select id="input-effect-mode" class="w-full px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-white text-sm focus:outline-none focus:border-white/50">
+              <option value="shockwave" class="bg-slate-900">Bass Shockwave (Rings + Scale)</option>
+              <option value="bounce" class="bg-slate-900">Kinetic Bounce (Spring + Glow)</option>
+              <option value="aurora" class="bg-slate-900">Aurora Pulse (Color Surge + Bokeh)</option>
+              <option value="equalizer" class="bg-slate-900">Equalizer Ring (Circular Spectrum)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Modal Footer Actions -->
+        <div class="pt-3 border-t border-white/10 flex items-center justify-end gap-3">
+          <button id="btn-cancel-modal" type="button" class="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-sm font-semibold text-white transition-colors">
+            Cancel
+          </button>
+          <button type="submit" class="px-6 py-2.5 rounded-xl bg-white text-slate-950 hover:bg-white/90 text-sm font-extrabold shadow-lg transition-all active:scale-95">
+            Save & Launch Countdown
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       TOAST NOTIFICATION CONTAINER
+  ====================================================================== -->
+  <div id="toast-container" class="fixed top-20 right-4 sm:right-6 z-50 flex flex-col gap-2 pointer-events-none max-w-sm"></div>
+
+  <!-- =====================================================================
+       APPLICATION JAVASCRIPT: STATE, ENCODING, AUDIO SYNC, CANVAS & UI
+  ====================================================================== -->
+  <script>
+    (function () {
+      'use strict';
+
+      /* -------------------------------------------------------------------
+         1. CONSTANTS & CURATED PRESETS
+      ------------------------------------------------------------------- */
+      const STORAGE_KEY_ITEMS = 'chronobeat_countdowns_v1';
+      const STORAGE_KEY_ACTIVE = 'chronobeat_active_id_v1';
+      const STORAGE_KEY_SP_TOKEN = 'chronobeat_sp_token_v1';
+      const STORAGE_KEY_SP_CLIENT = 'chronobeat_sp_client_v1';
+      const STORAGE_KEY_SP_VERIFIER = 'chronobeat_sp_verifier_v1';
+
+      const GRADIENT_PRESETS = [
+        { name: 'Hypernova', colors: ['#ff007f', '#7928ca', '#00d4ff'], angle: 135 },
+        { name: 'Sunset Synth', colors: ['#ff512f', '#dd2476', '#ffb347'], angle: 120 },
+        { name: 'Cyber Mint', colors: ['#00f5d4', '#00bbf9', '#7b2cbf'], angle: 145 },
+        { name: 'Midnight Velvet', colors: ['#4f46e5', '#9333ea', '#ec4899'], angle: 135 },
+        { name: 'Solar Flare', colors: ['#f59e0b', '#ef4444', '#db2777'], angle: 110 },
+        { name: 'Ocean Deep', colors: ['#0284c7', '#2563eb', '#4f46e5'], angle: 160 },
+        { name: 'Neon Tokyo', colors: ['#06b6d4', '#ec4899', '#facc15'], angle: 135 },
+        { name: 'Royal Gold', colors: ['#fbbf24', '#d97706', '#78350f'], angle: 135 },
+      ];
+
+      /* -------------------------------------------------------------------
+         2. UTILITY FUNCTIONS (UUID, Date Formatting, Clipboard, Toast)
+      ------------------------------------------------------------------- */
+      function generateId() {
+        return 'cb_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36).slice(-4);
+      }
+
+      // Format Date object to YYYY-MM-DDTHH:mm for <input type="datetime-local">
+      function toLocalDateTimeInputString(dateObj) {
+        const pad = (n) => String(n).padStart(2, '0');
+        return (
+          dateObj.getFullYear() +
+          '-' +
+          pad(dateObj.getMonth() + 1) +
+          '-' +
+          pad(dateObj.getDate()) +
+          'T' +
+          pad(dateObj.getHours()) +
+          ':' +
+          pad(dateObj.getMinutes())
+        );
+      }
+
+      function formatHumanTargetDate(isoStr) {
+        const d = new Date(isoStr);
+        if (isNaN(d.getTime())) return 'Invalid Date';
+        return d.toLocaleDateString(undefined, {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        }) + ' • ' + d.toLocaleTimeString(undefined, {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+      }
+
+      // Reliable iFrame-safe clipboard copy using document.execCommand('copy')
+      function copyTextToClipboard(text) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        let success = false;
+        try {
+          success = document.execCommand('copy');
+        } catch (err) {
+          success = false;
+        }
+        document.body.removeChild(textarea);
+        return success;
+      }
+
+      // Non-intrusive toast notification
+      function showToast(message, type = 'info') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        const accent =
+          type === 'success'
+            ? 'border-emerald-400/50 bg-emerald-950/85 text-emerald-100'
+            : type === 'warning'
+            ? 'border-amber-400/50 bg-amber-950/85 text-amber-100'
+            : 'border-white/20 bg-slate-900/90 text-white';
+
+        toast.className = `pointer-events-auto glass-panel px-4 py-3 rounded-2xl border text-xs sm:text-sm font-semibold shadow-2xl transform transition-all duration-300 translate-y-2 opacity-0 ${accent}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+
+        requestAnimationFrame(() => {
+          toast.classList.remove('translate-y-2', 'opacity-0');
+        });
+
+        setTimeout(() => {
+          toast.classList.add('opacity-0', '-translate-y-2');
+          setTimeout(() => toast.remove(), 300);
+        }, 3200);
+      }
+
+      /* -------------------------------------------------------------------
+         3. SPOTIFY URL / URI PARSER
+      ------------------------------------------------------------------- */
+      function parseSpotifyInput(raw) {
+        if (!raw || typeof raw !== 'string') return null;
+        const trimmed = raw.trim();
+
+        // Match URI format: spotify:track:1eyzqe2QqGZUmfcPZtrIyt
+        const uriMatch = trimmed.match(/^spotify:(track|playlist|album):([a-zA-Z0-9]{22})/i);
+        if (uriMatch) {
+          return { type: uriMatch[1].toLowerCase(), id: uriMatch[2] };
+        }
+
+        // Match URL format: https://open.spotify.com/(intl-xx/)?(embed/)?(track|playlist|album)/ID
+        const urlMatch = trimmed.match(/open\.spotify\.com\/(?:intl-[a-zA-Z-]+\/)?(?:embed\/)?(track|playlist|album)\/([a-zA-Z0-9]{22})/i);
+        if (urlMatch) {
+          return { type: urlMatch[1].toLowerCase(), id: urlMatch[2] };
+        }
+
+        return null;
+      }
+
+      function buildSpotifyEmbedUrl(spotifyObj) {
+        const type = spotifyObj && ['track', 'playlist', 'album'].includes(spotifyObj.type) ? spotifyObj.type : 'track';
+        const id = spotifyObj && spotifyObj.id ? spotifyObj.id : '1eyzqe2QqGZUmfcPZtrIyt';
+        return `https://open.spotify.com/embed/${type}/${id}?utm_source=generator&theme=0`;
+      }
+
+      /* -------------------------------------------------------------------
+         4. URL HASH STATE ENCODING & DECODING (#c=...)
+      ------------------------------------------------------------------- */
+      function encodeCountdownToHash(item) {
+        const compact = {
+          t: item.title,
+          s: item.subtitle || '',
+          d: item.targetDate,
+          c: item.gradient.colors,
+          a: item.gradient.angle,
+          st: item.spotify.type,
+          si: item.spotify.id,
+          b: item.bpm,
+          e: item.effectMode,
+        };
+        const jsonStr = JSON.stringify(compact);
+        const base64 = btoa(unescape(encodeURIComponent(jsonStr)))
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
+        return '#c=' + base64;
+      }
+
+      function decodeCountdownFromHash(hashStr) {
+        try {
+          if (!hashStr || !hashStr.startsWith('#c=')) return null;
+          let b64 = hashStr.slice(3).replace(/-/g, '+').replace(/_/g, '/');
+          while (b64.length % 4) b64 += '=';
+          const jsonStr = decodeURIComponent(escape(atob(b64)));
+          const data = JSON.parse(jsonStr);
+          if (!data || !data.t || !data.d) return null;
+
+          return {
+            id: 'shared_' + generateId(),
+            title: String(data.t).slice(0, 60),
+            subtitle: String(data.s || '').slice(0, 90),
+            targetDate: String(data.d),
+            gradient: {
+              colors: Array.isArray(data.c) && data.c.length === 3 ? data.c : ['#ff007f', '#7928ca', '#00d4ff'],
+              angle: typeof data.a === 'number' ? data.a : 135,
+            },
+            spotify: {
+              type: ['track', 'playlist', 'album'].includes(data.st) ? data.st : 'track',
+              id: data.si || '1eyzqe2QqGZUmfcPZtrIyt',
+            },
+            bpm: Math.min(180, Math.max(60, Number(data.b) || 128)),
+            effectMode: ['shockwave', 'bounce', 'aurora', 'equalizer'].includes(data.e) ? data.e : 'shockwave',
+            isSharedView: true,
+          };
+        } catch (err) {
+          console.warn('Failed to decode shared countdown hash:', err);
+          return null;
+        }
+      }
+
+      /* -------------------------------------------------------------------
+         5. APPLICATION STATE & LOCALSTORAGE MANAGEMENT
+      ------------------------------------------------------------------- */
+      let state = {
+        countdowns: [],
+        activeCountdown: null,
+        isSharedUnsaved: false,
+        spotifyMinimized: false,
+        lastCelebratedId: null,
+      };
+
+      function getDefaultCountdowns() {
+        const now = new Date();
+        const nextNewYear = new Date(now.getFullYear() + 1, 0, 1, 0, 0, 0);
+        const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
+        return [
+          {
+            id: 'default_ny_' + now.getFullYear(),
+            title: `New Year ${nextNewYear.getFullYear()} Drop`,
+            subtitle: 'Press play on Spotify & watch the clock pulse to the beat',
+            targetDate: toLocalDateTimeInputString(nextNewYear),
+            gradient: {
+              colors: ['#ff007f', '#7928ca', '#00d4ff'],
+              angle: 135,
+            },
+            spotify: {
+              type: 'track',
+              id: '1eyzqe2QqGZUmfcPZtrIyt', // M83 - Midnight City
+            },
+            bpm: 105,
+            effectMode: 'shockwave',
+          },
+          {
+            id: 'default_session_' + now.getFullYear(),
+            title: 'Midnight Synth Session',
+            subtitle: 'Deep electronic countdown stream',
+            targetDate: toLocalDateTimeInputString(twoHoursFromNow),
+            gradient: {
+              colors: ['#00f5d4', '#00bbf9', '#7b2cbf'],
+              angle: 145,
+            },
+            spotify: {
+              type: 'playlist',
+              id: '37i9dQZF1DX4dyzvuaRJ0n', // Spotify mint
+            },
+            bpm: 126,
+            effectMode: 'equalizer',
+          },
+        ];
+      }
+
+      function loadStateFromStorage() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY_ITEMS);
+          const parsed = raw ? JSON.parse(raw) : null;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            state.countdowns = parsed;
+          } else {
+            state.countdowns = getDefaultCountdowns();
+            saveCountdownsToStorage();
+          }
+        } catch (err) {
+          state.countdowns = getDefaultCountdowns();
+        }
+
+        // Check if URL has a shared #c=... hash
+        const sharedItem = decodeCountdownFromHash(window.location.hash);
+        if (sharedItem) {
+          state.activeCountdown = sharedItem;
+          // Check if an identical title + targetDate already exists in saved list
+          const alreadySaved = state.countdowns.some(
+            (c) => c.title === sharedItem.title && c.targetDate === sharedItem.targetDate
+          );
+          state.isSharedUnsaved = !alreadySaved;
+          return;
+        }
+
+        const savedActiveId = localStorage.getItem(STORAGE_KEY_ACTIVE);
+        const found = state.countdowns.find((c) => c.id === savedActiveId);
+        state.activeCountdown = found || state.countdowns[0];
+        state.isSharedUnsaved = false;
+      }
+
+      function saveCountdownsToStorage() {
+        try {
+          localStorage.setItem(STORAGE_KEY_ITEMS, JSON.stringify(state.countdowns));
+          if (state.activeCountdown && !state.isSharedUnsaved) {
+            localStorage.setItem(STORAGE_KEY_ACTIVE, state.activeCountdown.id);
+          }
+        } catch (err) {
+          console.warn('LocalStorage write failed:', err);
+        }
+      }
+
+      /* -------------------------------------------------------------------
+         6. DUAL AUDIO SYNC & BEAT ENGINE
+      ------------------------------------------------------------------- */
+      const audioEngine = {
+        bpm: 128,
+        beatPhase: 0, // 0.0 -> 1.0 per beat
+        beatCount: 0,
+        beatImpulse: 0, // 0.0 -> 1.0 sharp decay envelope
+        smoothEnergy: 0,
+        spectrum: new Float32Array(64),
+        // Live Web Audio API state
+        isLiveMicActive: false,
+        audioCtx: null,
+        analyser: null,
+        micStream: null,
+        freqData: null,
+        rollingBassAvg: 0.2,
+        lastLiveBeatTime: 0,
+        // Tap tempo history
+        tapTimestamps: [],
+      };
+
+      function triggerBeatHit(strength = 1.0) {
+        audioEngine.beatImpulse = Math.min(1.35, Math.max(audioEngine.beatImpulse, strength));
+        audioEngine.beatCount += 1;
+
+        // Spawn shockwave ring on canvas
+        if (state.activeCountdown) {
+          const mode = state.activeCountdown.effectMode;
+          const colors = state.activeCountdown.gradient.colors;
+          const color = colors[audioEngine.beatCount % colors.length];
+
+          if (mode === 'shockwave' || mode === 'equalizer') {
+            canvasState.shockwaves.push({
+              radius: 70,
+              maxRadius: Math.max(window.innerWidth, window.innerHeight) * 0.65,
+              alpha: 0.65 * strength,
+              color: color,
+              lineWidth: mode === 'shockwave' ? 4 : 2.5,
+            });
+          }
+
+          // Spawn burst particles
+          const burstCount = mode === 'aurora' ? 10 : mode === 'bounce' ? 14 : 8;
+          for (let i = 0; i < burstCount; i++) {
+            spawnParticle(color, strength);
+          }
+        }
+      }
+
+      function handleTapTempo() {
+        const now = performance.now();
+        const taps = audioEngine.tapTimestamps;
+
+        if (taps.length > 0 && now - taps[taps.length - 1] > 2200) {
+          taps.length = 0;
+        }
+        taps.push(now);
+        if (taps.length > 6) taps.shift();
+
+        // Immediately trigger a visual beat on every user tap so it feels tactile!
+        audioEngine.beatPhase = 0;
+        triggerBeatHit(1.1);
+
+        if (taps.length >= 2) {
+          let totalInterval = 0;
+          for (let i = 1; i < taps.length; i++) {
+            totalInterval += taps[i] - taps[i - 1];
+          }
+          const avgMs = totalInterval / (taps.length - 1);
+          const detectedBpm = Math.round(Math.min(180, Math.max(60, 60000 / avgMs)));
+          setActiveBpm(detectedBpm, true);
+        }
+      }
+
+      function setActiveBpm(newBpm, persistToCountdown = true) {
+        const clamped = Math.min(180, Math.max(60, Number(newBpm) || 128));
+        audioEngine.bpm = clamped;
+        document.getElementById('stage-bpm-slider').value = clamped;
+        document.getElementById('stage-bpm-value').textContent = clamped;
+        document.getElementById('display-bpm-badge').textContent = `${clamped} BPM`;
+
+        if (persistToCountdown && state.activeCountdown) {
+          state.activeCountdown.bpm = clamped;
+          if (!state.isSharedUnsaved) {
+            const idx = state.countdowns.findIndex((c) => c.id === state.activeCountdown.id);
+            if (idx !== -1) {
+              state.countdowns[idx].bpm = clamped;
+              saveCountdownsToStorage();
+            }
+          }
+        }
+      }
+
+      async function toggleLiveAudioSync() {
+        const btn = document.getElementById('btn-live-audio');
+        const label = document.getElementById('live-audio-label');
+
+        if (audioEngine.isLiveMicActive) {
+          // Stop live audio stream
+          if (audioEngine.micStream) {
+            audioEngine.micStream.getTracks().forEach((t) => t.stop());
+            audioEngine.micStream = null;
+          }
+          if (audioEngine.audioCtx) {
+            audioEngine.audioCtx.close().catch(() => {});
+            audioEngine.audioCtx = null;
+          }
+          audioEngine.isLiveMicActive = false;
+          label.textContent = 'Live Audio Sync';
+          btn.classList.remove('ring-2', 'ring-emerald-400', 'from-emerald-500', 'to-teal-600');
+          btn.classList.add('from-pink-500/80', 'to-violet-600/80');
+          showToast('Switched back to Smart BPM Beat Engine', 'info');
+          return;
+        }
+
+        // Request Microphone / System Audio capture
+        try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('Audio capture is not supported in this browser.');
+          }
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+            },
+          });
+
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          const ctx = new AudioContextClass();
+          const source = ctx.createMediaStreamSource(stream);
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 512;
+          analyser.smoothingTimeConstant = 0.76;
+          source.connect(analyser);
+
+          audioEngine.audioCtx = ctx;
+          audioEngine.analyser = analyser;
+          audioEngine.micStream = stream;
+          audioEngine.freqData = new Uint8Array(analyser.frequencyBinCount);
+          audioEngine.isLiveMicActive = true;
+
+          label.textContent = 'Listening Live...';
+          btn.classList.remove('from-pink-500/80', 'to-violet-600/80');
+          btn.classList.add('ring-2', 'ring-emerald-400', 'from-emerald-500', 'to-teal-600');
+          showToast('Live Audio Sync active! Visuals now react to real sound.', 'success');
+        } catch (err) {
+          showToast('Mic access unavailable — using Smart BPM + Tap Tempo mode.', 'warning');
+        }
+      }
+
+      function updateAudioEngine(dt, nowMs) {
+        if (audioEngine.isLiveMicActive && audioEngine.analyser && audioEngine.freqData) {
+          audioEngine.analyser.getByteFrequencyData(audioEngine.freqData);
+
+          // Extract bass bins (approx 20Hz - 160Hz)
+          let bassSum = 0;
+          const bassBins = 8;
+          for (let i = 0; i < bassBins; i++) {
+            bassSum += audioEngine.freqData[i] / 255;
+          }
+          const bassEnergy = bassSum / bassBins;
+
+          // Update rolling average & detect onset
+          audioEngine.rollingBassAvg = audioEngine.rollingBassAvg * 0.94 + bassEnergy * 0.06;
+          if (
+            bassEnergy > audioEngine.rollingBassAvg * 1.25 &&
+            bassEnergy > 0.24 &&
+            nowMs - audioEngine.lastLiveBeatTime > 220
+          ) {
+            audioEngine.lastLiveBeatTime = nowMs;
+            triggerBeatHit(Math.min(1.3, bassEnergy * 1.45));
+          }
+
+          // Map 64 spectrum bars
+          for (let i = 0; i < 64; i++) {
+            const binIdx = Math.min(audioEngine.freqData.length - 1, Math.floor(i * 1.8));
+            const targetVal = audioEngine.freqData[binIdx] / 255;
+            audioEngine.spectrum[i] += (targetVal - audioEngine.spectrum[i]) * 0.35;
+          }
+        } else {
+          // Smart BPM Beat Engine
+          const beatsPerSec = audioEngine.bpm / 60;
+          audioEngine.beatPhase += beatsPerSec * dt;
+
+          if (audioEngine.beatPhase >= 1.0) {
+            audioEngine.beatPhase %= 1.0;
+            triggerBeatHit(1.0);
+          }
+
+          // Synthesize musical 64-band harmonic spectrum locked to beatPhase
+          const phase = audioEngine.beatPhase;
+          const kick = Math.pow(Math.max(0, 1 - phase * 2.2), 2);
+          const offbeatHat = Math.pow(Math.max(0, 1 - Math.abs(phase - 0.5) * 4.5), 2);
+
+          for (let i = 0; i < 64; i++) {
+            const norm = i / 64;
+            const bassComponent = Math.exp(-norm * 5.5) * kick * 0.95;
+            const midComponent = Math.sin(norm * Math.PI * 3 + audioEngine.beatCount) * 0.25 * kick + 0.2;
+            const highComponent = norm > 0.55 ? offbeatHat * (0.4 + 0.3 * Math.sin(i * 1.7 + nowMs * 0.01)) : 0;
+            const val = Math.min(1, Math.max(0.06, bassComponent + Math.abs(midComponent) * 0.45 + highComponent));
+            audioEngine.spectrum[i] += (val - audioEngine.spectrum[i]) * 0.28;
+          }
+        }
+
+        // Exponential decay for crisp physical bump
+        audioEngine.beatImpulse *= Math.pow(0.025, dt);
+        audioEngine.smoothEnergy += (audioEngine.beatImpulse - audioEngine.smoothEnergy) * Math.min(1, dt * 18);
+      }
+
+      /* -------------------------------------------------------------------
+         7. HTML5 CANVAS VISUALIZER (Shockwaves, Particles, Equalizer Ring, Confetti)
+      ------------------------------------------------------------------- */
+      const canvas = document.getElementById('visualizer-canvas');
+      const ctx = canvas.getContext('2d');
+      const canvasState = {
+        width: 0,
+        height: 0,
+        dpr: 1,
+        shockwaves: [],
+        particles: [],
+      };
+
+      function resizeCanvas() {
+        canvasState.dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvasState.width = window.innerWidth;
+        canvasState.height = window.innerHeight;
+        canvas.width = Math.floor(canvasState.width * canvasState.dpr);
+        canvas.height = Math.floor(canvasState.height * canvasState.dpr);
+        ctx.setTransform(canvasState.dpr, 0, 0, canvasState.dpr, 0, 0);
+      }
+
+      function spawnParticle(color, strength = 1, isConfetti = false) {
+        if (canvasState.particles.length > 140) canvasState.particles.shift();
+        const cx = canvasState.width / 2;
+        const cy = canvasState.height / 2;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = isConfetti ? 3 + Math.random() * 7 : 1.2 + Math.random() * 3.5 * strength;
+
+        canvasState.particles.push({
+          x: isConfetti ? cx + (Math.random() - 0.5) * 180 : cx + Math.cos(angle) * (60 + Math.random() * 80),
+          y: isConfetti ? cy - 40 : cy + Math.sin(angle) * (40 + Math.random() * 60),
+          vx: Math.cos(angle) * speed,
+          vy: isConfetti ? Math.sin(angle) * speed - 3.5 : Math.sin(angle) * speed - 0.6,
+          size: isConfetti ? 5 + Math.random() * 5 : 2 + Math.random() * 3.5,
+          alpha: 0.9,
+          decay: isConfetti ? 0.012 : 0.015 + Math.random() * 0.015,
+          color: color,
+          isConfetti: isConfetti,
+          rotation: Math.random() * Math.PI * 2,
+          vRot: (Math.random() - 0.5) * 0.2,
+        });
+      }
+
+      function launchCelebrationFireworks() {
+        const colors = state.activeCountdown
+          ? state.activeCountdown.gradient.colors.concat(['#ffffff', '#facc15'])
+          : ['#ff007f', '#00d4ff', '#facc15', '#ffffff'];
+        for (let i = 0; i < 65; i++) {
+          spawnParticle(colors[i % colors.length], 1.4, true);
+        }
+      }
+
+      function renderCanvas(dt) {
+        const w = canvasState.width;
+        const h = canvasState.height;
+        ctx.clearRect(0, 0, w, h);
+
+        const cx = w / 2;
+        const cy = h / 2;
+        const mode = state.activeCountdown ? state.activeCountdown.effectMode : 'shockwave';
+        const colors = state.activeCountdown ? state.activeCountdown.gradient.colors : ['#ff007f', '#7928ca', '#00d4ff'];
+        const pulse = audioEngine.smoothEnergy;
+
+        // 1. EQUALIZER RING MODE: Circular 64-bar frequency ring around the countdown
+        if (mode === 'equalizer') {
+          const baseRadius = Math.min(w, h) * (w < 640 ? 0.34 : 0.29) + pulse * 16;
+          const bars = 64;
+
+          ctx.save();
+          ctx.translate(cx, cy);
+
+          // Subtle glowing inner ring
+          ctx.beginPath();
+          ctx.arc(0, 0, baseRadius - 6, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          for (let i = 0; i < bars; i++) {
+            const angle = (i / bars) * Math.PI * 2 - Math.PI / 2;
+            const amp = audioEngine.spectrum[i] || 0.1;
+            const barLen = 8 + amp * (w < 640 ? 48 : 85);
+
+            const x1 = Math.cos(angle) * baseRadius;
+            const y1 = Math.sin(angle) * baseRadius;
+            const x2 = Math.cos(angle) * (baseRadius + barLen);
+            const y2 = Math.sin(angle) * (baseRadius + barLen);
+
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.strokeStyle = i % 2 === 0 ? colors[0] : colors[2];
+            ctx.globalAlpha = 0.45 + amp * 0.55;
+            ctx.lineWidth = w < 640 ? 3 : 4.5;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        // 2. AURORA PULSE MODE: Undulating luminous wave ribbons across stage
+        if (mode === 'aurora') {
+          ctx.save();
+          for (let wave = 0; wave < 2; wave++) {
+            ctx.beginPath();
+            const baseY = cy + (wave === 0 ? -40 : 60);
+            ctx.moveTo(0, baseY);
+            for (let x = 0; x <= w; x += 24) {
+              const offset =
+                Math.sin(x * 0.005 + performance.now() * 0.002 + wave * 2) * (35 + pulse * 55) +
+                Math.cos(x * 0.01 - performance.now() * 0.0015) * 20;
+              ctx.lineTo(x, baseY + offset);
+            }
+            ctx.strokeStyle = wave === 0 ? colors[0] : colors[2];
+            ctx.globalAlpha = 0.22 + pulse * 0.28;
+            ctx.lineWidth = 3 + pulse * 4;
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        // 3. SHOCKWAVE RINGS
+        for (let i = canvasState.shockwaves.length - 1; i >= 0; i--) {
+          const sw = canvasState.shockwaves[i];
+          sw.radius += (260 + pulse * 180) * dt;
+          sw.alpha -= 0.72 * dt;
+
+          if (sw.alpha <= 0 || sw.radius >= sw.maxRadius) {
+            canvasState.shockwaves.splice(i, 1);
+            continue;
+          }
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(cx, cy, sw.radius, 0, Math.PI * 2);
+          ctx.strokeStyle = sw.color;
+          ctx.globalAlpha = Math.max(0, sw.alpha);
+          ctx.lineWidth = sw.lineWidth;
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // 4. BEAT PARTICLES & CONFETTI
+        for (let i = canvasState.particles.length - 1; i >= 0; i--) {
+          const p = canvasState.particles[i];
+          p.x += p.vx * (1 + pulse * 1.4);
+          p.y += p.vy * (1 + pulse * 1.4);
+          if (p.isConfetti) {
+            p.vy += 0.14; // gravity
+            p.rotation += p.vRot;
+          }
+          p.alpha -= p.decay;
+
+          if (p.alpha <= 0) {
+            canvasState.particles.splice(i, 1);
+            continue;
+          }
+
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, p.alpha);
+          ctx.fillStyle = p.color;
+          if (p.isConfetti) {
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rotation);
+            ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+          } else {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * (1 + pulse * 0.4), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+      }
+
+      /* -------------------------------------------------------------------
+         8. DOM BEAT-REACTIVE PHYSICS & COUNTDOWN TICKER
+      ------------------------------------------------------------------- */
+      const cardEls = [
+        document.getElementById('card-days'),
+        document.getElementById('card-hours'),
+        document.getElementById('card-minutes'),
+        document.getElementById('card-seconds'),
+      ];
+      const orb1 = document.getElementById('orb-1');
+      const orb2 = document.getElementById('orb-2');
+      const orb3 = document.getElementById('orb-3');
+      const beatLed = document.getElementById('beat-led');
+      const titleWrapper = document.getElementById('title-wrapper');
+      const brandBadge = document.getElementById('brand-pulse-badge');
+
+      function applyBeatPhysicsToDOM() {
+        const pulse = audioEngine.smoothEnergy;
+        const mode = state.activeCountdown ? state.activeCountdown.effectMode : 'shockwave';
+        const colors = state.activeCountdown ? state.activeCountdown.gradient.colors : ['#ff007f', '#7928ca', '#00d4ff'];
+
+        // Pulse LED & brand icon
+        beatLed.style.transform = `scale(${1 + pulse * 0.65})`;
+        brandBadge.style.transform = `scale(${1 + pulse * 0.08})`;
+
+        // Ambient orbs react to bass
+        orb1.style.transform = `scale(${1 + pulse * 0.22})`;
+        orb2.style.transform = `scale(${1 + pulse * 0.26})`;
+        orb3.style.transform = `scale(${1 + pulse * 0.18})`;
+
+        // Card physics tailored to selected reaction mode
+        cardEls.forEach((card, idx) => {
+          if (mode === 'bounce') {
+            const direction = idx % 2 === 0 ? 1 : -1;
+            const oddEvenPhase = (audioEngine.beatCount + idx) % 2 === 0 ? 1 : 0.45;
+            const yOffset = -pulse * 12 * oddEvenPhase;
+            const rot = direction * pulse * 1.6;
+            const scale = 1 + pulse * 0.055 * oddEvenPhase;
+            card.style.transform = `translate3d(0, ${yOffset.toFixed(2)}px, 0) scale(${scale.toFixed(4)}) rotate(${rot.toFixed(2)}deg)`;
+            card.style.borderColor = `rgba(255, 255, 255, ${(0.14 + pulse * 0.4).toFixed(2)})`;
+            card.style.boxShadow = `0 14px 42px rgba(0,0,0,0.4), 0 0 ${Math.round(pulse * 28)}px ${colors[idx % colors.length]}66`;
+          } else if (mode === 'aurora') {
+            const wave = Math.sin(performance.now() * 0.004 + idx * 0.9) * 3;
+            const scale = 1 + pulse * 0.035;
+            card.style.transform = `translate3d(0, ${wave.toFixed(2)}px, 0) scale(${scale.toFixed(4)})`;
+            card.style.borderColor = `rgba(255, 255, 255, ${(0.14 + pulse * 0.35).toFixed(2)})`;
+            card.style.boxShadow = `0 12px 40px rgba(0,0,0,0.35), 0 0 ${Math.round(pulse * 32)}px ${colors[1]}77`;
+          } else {
+            // Shockwave & Equalizer Ring punchy scale bump
+            const scale = 1 + pulse * 0.05;
+            card.style.transform = `scale(${scale.toFixed(4)})`;
+            card.style.borderColor = `rgba(255, 255, 255, ${(0.14 + pulse * 0.42).toFixed(2)})`;
+            card.style.boxShadow = `0 12px 40px rgba(0,0,0,0.35), 0 0 ${Math.round(pulse * 26)}px ${colors[0]}55`;
+          }
+        });
+
+        // Subtle title scale bump
+        if (mode === 'bounce') {
+          titleWrapper.style.transform = `scale(${(1 + pulse * 0.03).toFixed(4)})`;
+        } else {
+          titleWrapper.style.transform = `scale(${(1 + pulse * 0.015).toFixed(4)})`;
+        }
+      }
+
+      function updateCountdownClock() {
+        if (!state.activeCountdown) return;
+        const targetMs = new Date(state.activeCountdown.targetDate).getTime();
+        const nowMs = Date.now();
+        const diff = targetMs - nowMs;
+
+        const pad2 = (n) => String(Math.max(0, Math.floor(n))).padStart(2, '0');
+        const celebrationPanel = document.getElementById('celebration-panel');
+
+        if (isNaN(targetMs) || diff <= 0) {
+          document.getElementById('val-days').textContent = '00';
+          document.getElementById('val-hours').textContent = '00';
+          document.getElementById('val-minutes').textContent = '00';
+          document.getElementById('val-seconds').textContent = '00';
+
+          celebrationPanel.classList.remove('hidden');
+          if (state.lastCelebratedId !== state.activeCountdown.id) {
+            state.lastCelebratedId = state.activeCountdown.id;
+            launchCelebrationFireworks();
+          }
+          return;
+        }
+
+        celebrationPanel.classList.add('hidden');
+        const totalSec = Math.floor(diff / 1000);
+        const days = Math.floor(totalSec / 86400);
+        const hours = Math.floor((totalSec % 86400) / 3600);
+        const minutes = Math.floor((totalSec % 3600) / 60);
+        const seconds = totalSec % 60;
+
+        document.getElementById('val-days').textContent = days >= 100 ? String(days) : pad2(days);
+        document.getElementById('val-hours').textContent = pad2(hours);
+        document.getElementById('val-minutes').textContent = pad2(minutes);
+        document.getElementById('val-seconds').textContent = pad2(seconds);
+      }
+
+      /* -------------------------------------------------------------------
+         9. RENDER ACTIVE COUNTDOWN TO STAGE & DRAWER
+      ------------------------------------------------------------------- */
+      function renderActiveCountdown() {
+        const item = state.activeCountdown;
+        if (!item) return;
+
+        // Title, Subtitle, Target Date
+        document.getElementById('display-title').textContent = item.title;
+        const subEl = document.getElementById('display-subtitle');
+        if (item.subtitle && item.subtitle.trim()) {
+          subEl.textContent = item.subtitle;
+          subEl.classList.remove('hidden');
+        } else {
+          subEl.classList.add('hidden');
+        }
+        document.getElementById('display-target-date').textContent = formatHumanTargetDate(item.targetDate);
+
+        // Background Gradient & Ambient Orbs
+        const [c1, c2, c3] = item.gradient.colors;
+        const angle = item.gradient.angle;
+        document.getElementById('bg-gradient-layer').style.background = `linear-gradient(${angle}deg, ${c1} 0%, ${c2} 50%, ${c3} 100%)`;
+        orb1.style.background = c1;
+        orb2.style.background = c3;
+        orb3.style.background = c2;
+
+        // BPM & Effect Mode UI sync
+        setActiveBpm(item.bpm, false);
+        setEffectModeUI(item.effectMode, false);
+
+        // Spotify Embed Player (only reload iframe src if changed so playback isn't interrupted unnecessarily)
+        const embedUrl = buildSpotifyEmbedUrl(item.spotify);
+        const iframe = document.getElementById('spotify-iframe');
+        if (iframe.getAttribute('src') !== embedUrl) {
+          iframe.setAttribute('src', embedUrl);
+        }
+        const typeLabel = item.spotify.type.charAt(0).toUpperCase() + item.spotify.type.slice(1);
+        document.getElementById('spotify-dock-status').textContent = `Spotify ${typeLabel} Soundtrack`;
+
+        // Shared Link Banner visibility
+        const sharedBanner = document.getElementById('shared-banner');
+        if (state.isSharedUnsaved) {
+          sharedBanner.classList.remove('hidden');
+        } else {
+          sharedBanner.classList.add('hidden');
+        }
+
+        updateCountdownClock();
+        renderSavedCountdownsList();
+      }
+
+      function setEffectModeUI(mode, persist = true) {
+        document.querySelectorAll('.effect-btn').forEach((btn) => {
+          if (btn.dataset.effect === mode) {
+            btn.className = 'effect-btn px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all bg-white text-slate-950 shadow';
+          } else {
+            btn.className = 'effect-btn px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all text-white/75 hover:text-white';
+          }
+        });
+
+        if (persist && state.activeCountdown) {
+          state.activeCountdown.effectMode = mode;
+          if (!state.isSharedUnsaved) {
+            const idx = state.countdowns.findIndex((c) => c.id === state.activeCountdown.id);
+            if (idx !== -1) {
+              state.countdowns[idx].effectMode = mode;
+              saveCountdownsToStorage();
+            }
+          }
+        }
+      }
+
+      function renderSavedCountdownsList() {
+        const listEl = document.getElementById('saved-countdowns-list');
+        document.getElementById('saved-count-badge').textContent = state.countdowns.length;
+        listEl.innerHTML = '';
+
+        state.countdowns.forEach((item) => {
+          const isCurrent = state.activeCountdown && state.activeCountdown.id === item.id;
+          const [c1, c2, c3] = item.gradient.colors;
+          const card = document.createElement('div');
+          card.className = `p-3.5 rounded-2xl border transition-all ${
+            isCurrent
+              ? 'bg-white/15 border-white/40 shadow-lg'
+              : 'bg-white/5 hover:bg-white/10 border-white/10'
+          }`;
+
+          card.innerHTML = `
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0 flex-1 cursor-pointer select-item-area">
+                <div class="flex items-center gap-2">
+                  <span class="w-3.5 h-3.5 rounded-full flex-shrink-0 border border-white/30" style="background: linear-gradient(135deg, ${c1}, ${c2}, ${c3});"></span>
+                  <h3 class="font-bold text-sm text-white truncate">${escapeHtml(item.title)}</h3>
+                  ${isCurrent ? '<span class="px-1.5 py-0.5 rounded bg-emerald-400/20 text-emerald-300 text-[10px] font-bold">Active</span>' : ''}
+                </div>
+                <p class="text-[11px] text-white/60 mt-1 truncate">${formatHumanTargetDate(item.targetDate)}</p>
+                <div class="flex items-center gap-2 mt-2 text-[10px] font-semibold text-white/70">
+                  <span class="px-2 py-0.5 rounded bg-black/30 uppercase">${item.spotify.type}</span>
+                  <span class="px-2 py-0.5 rounded bg-black/30 font-mono">${item.bpm} BPM</span>
+                  <span class="px-2 py-0.5 rounded bg-black/30 capitalize">${item.effectMode}</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-1">
+                <button type="button" class="btn-drawer-edit p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white/85" title="Edit">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                </button>
+                <button type="button" class="btn-drawer-delete p-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/30 text-rose-300" title="Delete">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg>
+                </button>
+              </div>
+            </div>
+          `;
+
+          // Activate countdown on click
+          card.querySelector('.select-item-area').addEventListener('click', () => {
+            state.activeCountdown = item;
+            state.isSharedUnsaved = false;
+            saveCountdownsToStorage();
+            // Clear hash if switching to a local saved countdown
+            if (window.location.hash) {
+              history.replaceState(null, '', window.location.pathname + window.location.search);
+            }
+            renderActiveCountdown();
+            closeDrawer();
+          });
+
+          // Edit item
+          card.querySelector('.btn-drawer-edit').addEventListener('click', () => {
+            closeDrawer();
+            openCreatorModal(item);
+          });
+
+          // Two-step inline delete (never uses window.confirm)
+          const delBtn = card.querySelector('.btn-drawer-delete');
+          let confirmArmed = false;
+          delBtn.addEventListener('click', () => {
+            if (!confirmArmed) {
+              confirmArmed = true;
+              delBtn.innerHTML = '<span class="text-[10px] font-bold px-1">Confirm?</span>';
+              delBtn.classList.add('bg-rose-600', 'text-white');
+              setTimeout(() => {
+                confirmArmed = false;
+                if (delBtn.isConnected) {
+                  delBtn.innerHTML = '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg>';
+                  delBtn.classList.remove('bg-rose-600', 'text-white');
+                }
+              }, 2600);
+              return;
+            }
+
+            if (state.countdowns.length <= 1) {
+              showToast('Keep at least one countdown in your list!', 'warning');
+              return;
+            }
+
+            state.countdowns = state.countdowns.filter((c) => c.id !== item.id);
+            if (state.activeCountdown && state.activeCountdown.id === item.id) {
+              state.activeCountdown = state.countdowns[0];
+              state.isSharedUnsaved = false;
+            }
+            saveCountdownsToStorage();
+            renderActiveCountdown();
+            showToast('Countdown deleted', 'info');
+          });
+
+          listEl.appendChild(card);
+        });
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      /* -------------------------------------------------------------------
+         10. CREATOR & EDITOR MODAL LOGIC
+      ------------------------------------------------------------------- */
+      let modalSpotifySelection = { type: 'track', id: '1eyzqe2QqGZUmfcPZtrIyt' };
+
+      function initGradientPresetButtons() {
+        const grid = document.getElementById('gradient-presets-grid');
+        grid.innerHTML = '';
+        GRADIENT_PRESETS.forEach((preset) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.title = preset.name;
+          btn.className = 'h-9 rounded-xl border border-white/25 hover:scale-105 active:scale-95 transition-transform shadow-sm';
+          btn.style.background = `linear-gradient(${preset.angle}deg, ${preset.colors[0]}, ${preset.colors[1]}, ${preset.colors[2]})`;
+          btn.addEventListener('click', () => {
+            document.getElementById('color-stop-1').value = preset.colors[0];
+            document.getElementById('color-stop-2').value = preset.colors[1];
+            document.getElementById('color-stop-3').value = preset.colors[2];
+            document.getElementById('input-gradient-angle').value = preset.angle;
+            updateModalGradientPreview();
+          });
+          grid.appendChild(btn);
+        });
+      }
+
+      function updateModalGradientPreview() {
+        const c1 = document.getElementById('color-stop-1').value;
+        const c2 = document.getElementById('color-stop-2').value;
+        const c3 = document.getElementById('color-stop-3').value;
+        const angle = document.getElementById('input-gradient-angle').value;
+        document.getElementById('gradient-angle-label').textContent = `${angle}°`;
+        document.getElementById('angle-val-display').textContent = `${angle}°`;
+        document.getElementById('modal-gradient-preview').style.background = `linear-gradient(${angle}deg, ${c1}, ${c2}, ${c3})`;
+      }
+
+      function setModalSpotifySelection(type, id, updateInput = true) {
+        modalSpotifySelection = { type, id };
+        const badge = document.getElementById('spotify-parsed-badge');
+        badge.textContent = type.toUpperCase();
+        if (updateInput) {
+          document.getElementById('input-spotify-url').value = `https://open.spotify.com/${type}/${id}`;
+        }
+        document.getElementById('modal-spotify-preview').src = buildSpotifyEmbedUrl(modalSpotifySelection);
+      }
+
+      function openCreatorModal(editItem = null) {
+        const modal = document.getElementById('creator-modal');
+        const heading = document.getElementById('modal-heading');
+
+        if (editItem) {
+          heading.textContent = 'Customize Countdown';
+          document.getElementById('form-countdown-id').value = editItem.id;
+          document.getElementById('input-title').value = editItem.title;
+          document.getElementById('input-subtitle').value = editItem.subtitle || '';
+          document.getElementById('input-datetime').value = editItem.targetDate;
+          document.getElementById('color-stop-1').value = editItem.gradient.colors[0];
+          document.getElementById('color-stop-2').value = editItem.gradient.colors[1];
+          document.getElementById('color-stop-3').value = editItem.gradient.colors[2];
+          document.getElementById('input-gradient-angle').value = editItem.gradient.angle;
+          document.getElementById('input-bpm').value = editItem.bpm;
+          document.getElementById('modal-bpm-display').textContent = `${editItem.bpm} BPM`;
+          document.getElementById('input-effect-mode').value = editItem.effectMode;
+          setModalSpotifySelection(editItem.spotify.type, editItem.spotify.id, true);
+        } else {
+          heading.textContent = 'Create New Countdown';
+          document.getElementById('form-countdown-id').value = '';
+          document.getElementById('input-title').value = '';
+          document.getElementById('input-subtitle').value = '';
+          const defaultTarget = new Date(Date.now() + 60 * 60 * 1000);
+          document.getElementById('input-datetime').value = toLocalDateTimeInputString(defaultTarget);
+          document.getElementById('color-stop-1').value = '#ff007f';
+          document.getElementById('color-stop-2').value = '#7928ca';
+          document.getElementById('color-stop-3').value = '#00d4ff';
+          document.getElementById('input-gradient-angle').value = 135;
+          document.getElementById('input-bpm').value = 128;
+          document.getElementById('modal-bpm-display').textContent = '128 BPM';
+          document.getElementById('input-effect-mode').value = 'shockwave';
+          setModalSpotifySelection('track', '1eyzqe2QqGZUmfcPZtrIyt', true);
+        }
+
+        updateModalGradientPreview();
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+
+      function closeCreatorModal() {
+        const modal = document.getElementById('creator-modal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+
+      /* -------------------------------------------------------------------
+         11. CLIENT-SIDE SPOTIFY OAUTH 2.0 PKCE + CATALOG SEARCH
+      ------------------------------------------------------------------- */
+      function getRedirectUri() {
+        return window.location.origin + window.location.pathname;
+      }
+
+      async function generatePkceChallenge(verifier) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(verifier);
+        const digest = await window.crypto.subtle.digest('SHA-256', data);
+        return btoa(String.fromCharCode(...new Uint8Array(digest)))
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
+      }
+
+      function generateRandomString(len) {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let res = '';
+        const arr = new Uint8Array(len);
+        window.crypto.getRandomValues(arr);
+        for (let i = 0; i < len; i++) res += chars[arr[i] % chars.length];
+        return res;
+      }
+
+      async function startSpotifyPkceAuth() {
+        const clientId = document.getElementById('input-spotify-client-id').value.trim();
+        if (!clientId) {
+          showToast('Please enter your Spotify Developer Client ID first.', 'warning');
+          return;
+        }
+        localStorage.setItem(STORAGE_KEY_SP_CLIENT, clientId);
+        const verifier = generateRandomString(64);
+        localStorage.setItem(STORAGE_KEY_SP_VERIFIER, verifier);
+        const challenge = await generatePkceChallenge(verifier);
+
+        const params = new URLSearchParams({
+          client_id: clientId,
+          response_type: 'code',
+          redirect_uri: getRedirectUri(),
+          code_challenge_method: 'S256',
+          code_challenge: challenge,
+          scope: 'user-read-private playlist-read-private',
+        });
+
+        window.location.href = 'https://accounts.spotify.com/authorize?' + params.toString();
+      }
+
+      async function handleSpotifyOAuthCallback() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        if (!code) return;
+
+        const clientId = localStorage.getItem(STORAGE_KEY_SP_CLIENT);
+        const verifier = localStorage.getItem(STORAGE_KEY_SP_VERIFIER);
+        if (!clientId || !verifier) return;
+
+        try {
+          const body = new URLSearchParams({
+            client_id: clientId,
+            grant_type: 'authorization_code',
+            code: code,
+            redirect_uri: getRedirectUri(),
+            code_verifier: verifier,
+          });
+
+          const resp = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+          });
+          const data = await resp.json();
+          if (data.access_token) {
+            localStorage.setItem(
+              STORAGE_KEY_SP_TOKEN,
+              JSON.stringify({
+                token: data.access_token,
+                expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
+              })
+            );
+            // Clean ?code= from URL
+            history.replaceState(null, '', window.location.pathname + window.location.hash);
+            updateSpotifyAuthUI();
+            showToast('Connected to Spotify! Open Create/Customize to search catalog.', 'success');
+          }
+        } catch (err) {
+          showToast('Spotify token exchange failed.', 'warning');
+        }
+      }
+
+      function getValidSpotifyToken() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY_SP_TOKEN);
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.token && parsed.expiresAt > Date.now() + 15000) {
+            return parsed.token;
+          }
+        } catch (e) {}
+        return null;
+      }
+
+      function updateSpotifyAuthUI() {
+        document.getElementById('spotify-redirect-uri-text').textContent = getRedirectUri();
+        const savedClient = localStorage.getItem(STORAGE_KEY_SP_CLIENT);
+        if (savedClient) {
+          document.getElementById('input-spotify-client-id').value = savedClient;
+        }
+        const token = getValidSpotifyToken();
+        if (token) {
+          document.getElementById('spotify-auth-disconnected').classList.add('hidden');
+          document.getElementById('spotify-auth-connected').classList.remove('hidden');
+        } else {
+          document.getElementById('spotify-auth-disconnected').classList.remove('hidden');
+          document.getElementById('spotify-auth-connected').classList.add('hidden');
+        }
+      }
+
+      async function searchSpotifyCatalog() {
+        const token = getValidSpotifyToken();
+        if (!token) {
+          updateSpotifyAuthUI();
+          showToast('Spotify session expired. Please reconnect.', 'warning');
+          return;
+        }
+        const query = document.getElementById('input-spotify-search').value.trim();
+        const type = document.getElementById('select-spotify-search-type').value;
+        if (!query) return;
+
+        const resultsBox = document.getElementById('spotify-search-results');
+        resultsBox.innerHTML = '<div class="text-xs text-white/60 py-2">Searching Spotify...</div>';
+
+        try {
+          const res = await fetch(
+            `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=${encodeURIComponent(type)}&limit=8`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const data = await res.json();
+          const collection = data[type + 's'] ? data[type + 's'].items : [];
+          resultsBox.innerHTML = '';
+
+          if (!collection.length) {
+            resultsBox.innerHTML = '<div class="text-xs text-white/50 py-2">No results found.</div>';
+            return;
+          }
+
+          collection.forEach((entry) => {
+            if (!entry) return;
+            const imgUrl =
+              entry.images && entry.images[0]
+                ? entry.images[0].url
+                : entry.album && entry.album.images && entry.album.images[0]
+                ? entry.album.images[0].url
+                : 'https://placehold.co/64x64/1DB954/ffffff?text=SP';
+            const sub =
+              type === 'track'
+                ? entry.artists.map((a) => a.name).join(', ')
+                : type === 'album'
+                ? entry.artists.map((a) => a.name).join(', ')
+                : `By ${entry.owner ? entry.owner.display_name : 'Spotify'}`;
+
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'w-full flex items-center gap-2.5 p-2 rounded-xl bg-black/35 hover:bg-white/15 border border-white/10 text-left transition-all';
+            row.innerHTML = `
+              <img src="${imgUrl}" onerror="this.src='https://placehold.co/64x64/1DB954/ffffff?text=SP'" alt="" class="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+              <div class="min-w-0 flex-1">
+                <div class="text-xs font-bold text-white truncate">${escapeHtml(entry.name)}</div>
+                <div class="text-[10px] text-white/60 truncate">${escapeHtml(sub)}</div>
+              </div>
+              <span class="px-2 py-0.5 rounded bg-[#1DB954]/20 text-[#1DB954] text-[10px] font-bold uppercase">Select</span>
+            `;
+            row.addEventListener('click', () => {
+              setModalSpotifySelection(type, entry.id, true);
+              showToast(`Selected "${entry.name}"`, 'success');
+            });
+            resultsBox.appendChild(row);
+          });
+        } catch (err) {
+          resultsBox.innerHTML = '<div class="text-xs text-rose-300 py-2">Error querying Spotify API.</div>';
+        }
+      }
+
+      /* -------------------------------------------------------------------
+         12. DRAWER CONTROLS & EVENT LISTENERS
+      ------------------------------------------------------------------- */
+      function openDrawer() {
+        const drawer = document.getElementById('countdowns-drawer');
+        const backdrop = document.getElementById('drawer-backdrop');
+        renderSavedCountdownsList();
+        backdrop.classList.remove('hidden');
+        requestAnimationFrame(() => {
+          backdrop.classList.remove('opacity-0');
+          drawer.classList.remove('-translate-x-full');
+        });
+      }
+
+      function closeDrawer() {
+        const drawer = document.getElementById('countdowns-drawer');
+        const backdrop = document.getElementById('drawer-backdrop');
+        backdrop.classList.add('opacity-0');
+        drawer.classList.add('-translate-x-full');
+        setTimeout(() => backdrop.classList.add('hidden'), 300);
+      }
+
+      function bindEvents() {
+        // Drawer buttons
+        document.getElementById('btn-open-drawer').addEventListener('click', openDrawer);
+        document.getElementById('btn-close-drawer').addEventListener('click', closeDrawer);
+        document.getElementById('drawer-backdrop').addEventListener('click', closeDrawer);
+        document.getElementById('btn-drawer-create').addEventListener('click', () => {
+          closeDrawer();
+          openCreatorModal(null);
+        });
+
+        // Top Header Create / Edit / Share buttons
+        document.getElementById('btn-new-countdown').addEventListener('click', () => openCreatorModal(null));
+        document.getElementById('btn-edit-current').addEventListener('click', () => openCreatorModal(state.activeCountdown));
+        document.getElementById('btn-celebration-edit').addEventListener('click', () => openCreatorModal(state.activeCountdown));
+        document.getElementById('btn-celebration-burst').addEventListener('click', launchCelebrationFireworks);
+        document.getElementById('btn-change-track').addEventListener('click', () => openCreatorModal(state.activeCountdown));
+
+        // Share Link button -> Encodes full countdown into #c=... and copies URL
+        document.getElementById('btn-share-link').addEventListener('click', () => {
+          if (!state.activeCountdown) return;
+          const hash = encodeCountdownToHash(state.activeCountdown);
+          history.replaceState(null, '', hash);
+          const fullUrl = window.location.href;
+          const copied = copyTextToClipboard(fullUrl);
+          if (copied) {
+            showToast('Shareable countdown link copied to clipboard!', 'success');
+          } else {
+            showToast('URL updated with encoded countdown — copy from address bar!', 'info');
+          }
+        });
+
+        // Save Shared Countdown to LocalStorage
+        document.getElementById('btn-save-shared').addEventListener('click', () => {
+          if (!state.activeCountdown) return;
+          const savedCopy = {
+            ...state.activeCountdown,
+            id: generateId(),
+            isSharedView: false,
+          };
+          state.countdowns.unshift(savedCopy);
+          state.activeCountdown = savedCopy;
+          state.isSharedUnsaved = false;
+          saveCountdownsToStorage();
+          renderActiveCountdown();
+          showToast('Saved to My Countdowns!', 'success');
+        });
+
+        // Stage Effect Mode selector pills
+        document.querySelectorAll('.effect-btn').forEach((btn) => {
+          btn.addEventListener('click', () => setEffectModeUI(btn.dataset.effect, true));
+        });
+
+        // Stage BPM Slider & Tap Tempo & Live Audio Sync
+        document.getElementById('stage-bpm-slider').addEventListener('input', (e) => {
+          setActiveBpm(e.target.value, true);
+        });
+        document.getElementById('btn-tap-tempo').addEventListener('click', handleTapTempo);
+        document.getElementById('btn-live-audio').addEventListener('click', toggleLiveAudioSync);
+
+        // Spotify Dock Minimize / Expand toggle
+        document.getElementById('btn-toggle-spotify').addEventListener('click', () => {
+          state.spotifyMinimized = !state.spotifyMinimized;
+          const wrapper = document.getElementById('spotify-embed-wrapper');
+          const chevron = document.getElementById('spotify-chevron');
+          if (state.spotifyMinimized) {
+            wrapper.style.maxHeight = '0px';
+            wrapper.style.paddingTop = '0px';
+            wrapper.style.paddingBottom = '0px';
+            wrapper.style.opacity = '0';
+            chevron.style.transform = 'rotate(180deg)';
+          } else {
+            wrapper.style.maxHeight = '120px';
+            wrapper.style.paddingTop = '0.5rem';
+            wrapper.style.paddingBottom = '0.5rem';
+            wrapper.style.opacity = '1';
+            chevron.style.transform = 'rotate(0deg)';
+          }
+        });
+
+        // Modal Close & Cancel
+        document.getElementById('btn-close-modal').addEventListener('click', closeCreatorModal);
+        document.getElementById('btn-cancel-modal').addEventListener('click', closeCreatorModal);
+
+        // Modal Quick-Set Time Chips
+        document.querySelectorAll('.quick-time-chip').forEach((chip) => {
+          chip.addEventListener('click', () => {
+            const now = new Date();
+            let target = new Date(now);
+            const mode = chip.dataset.quickTime;
+            if (mode === '15m') target = new Date(now.getTime() + 15 * 60 * 1000);
+            else if (mode === '1h') target = new Date(now.getTime() + 60 * 60 * 1000);
+            else if (mode === 'midnight') {
+              target.setHours(24, 0, 0, 0);
+            } else if (mode === 'friday') {
+              const daysUntilFri = (5 - now.getDay() + 7) % 7 || 7;
+              target.setDate(now.getDate() + daysUntilFri);
+              target.setHours(20, 0, 0, 0);
+            } else if (mode === 'newyear') {
+              target = new Date(now.getFullYear() + 1, 0, 1, 0, 0, 0);
+            }
+            document.getElementById('input-datetime').value = toLocalDateTimeInputString(target);
+          });
+        });
+
+        // Modal Gradient Controls
+        ['color-stop-1', 'color-stop-2', 'color-stop-3', 'input-gradient-angle'].forEach((id) => {
+          document.getElementById(id).addEventListener('input', updateModalGradientPreview);
+        });
+
+        // Modal BPM slider readout
+        document.getElementById('input-bpm').addEventListener('input', (e) => {
+          document.getElementById('modal-bpm-display').textContent = `${e.target.value} BPM`;
+        });
+
+        // Modal Spotify Tabs
+        const tabLink = document.getElementById('tab-spotify-link');
+        const tabOAuth = document.getElementById('tab-spotify-oauth');
+        const panelLink = document.getElementById('panel-spotify-link');
+        const panelOAuth = document.getElementById('panel-spotify-oauth');
+
+        tabLink.addEventListener('click', () => {
+          tabLink.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white text-slate-950 transition-all';
+          tabOAuth.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold text-white/75 hover:text-white transition-all';
+          panelLink.classList.remove('hidden');
+          panelOAuth.classList.add('hidden');
+        });
+
+        tabOAuth.addEventListener('click', () => {
+          tabOAuth.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white text-slate-950 transition-all';
+          tabLink.className = 'px-2.5 py-1 rounded-lg text-[11px] font-bold text-white/75 hover:text-white transition-all';
+          panelOAuth.classList.remove('hidden');
+          panelLink.classList.add('hidden');
+          updateSpotifyAuthUI();
+        });
+
+        // Modal Spotify URL live parser
+        document.getElementById('input-spotify-url').addEventListener('input', (e) => {
+          const parsed = parseSpotifyInput(e.target.value);
+          if (parsed) {
+            setModalSpotifySelection(parsed.type, parsed.id, false);
+          }
+        });
+
+        // Modal Quick-Pick Spotify Demo Soundtracks
+        document.querySelectorAll('.quick-sp-btn').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const type = btn.dataset.spType;
+            const id = btn.dataset.spId;
+            const bpm = btn.dataset.spBpm;
+            setModalSpotifySelection(type, id, true);
+            if (bpm) {
+              document.getElementById('input-bpm').value = bpm;
+              document.getElementById('modal-bpm-display').textContent = `${bpm} BPM`;
+            }
+          });
+        });
+
+        // Modal Spotify OAuth PKCE actions
+        document.getElementById('btn-spotify-pkce-login').addEventListener('click', startSpotifyPkceAuth);
+        document.getElementById('btn-copy-redirect-uri').addEventListener('click', () => {
+          if (copyTextToClipboard(getRedirectUri())) {
+            showToast('Redirect URI copied!', 'success');
+          }
+        });
+        document.getElementById('btn-spotify-disconnect').addEventListener('click', () => {
+          localStorage.removeItem(STORAGE_KEY_SP_TOKEN);
+          updateSpotifyAuthUI();
+          showToast('Disconnected Spotify API', 'info');
+        });
+        document.getElementById('btn-spotify-search-go').addEventListener('click', searchSpotifyCatalog);
+        document.getElementById('input-spotify-search').addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            searchSpotifyCatalog();
+          }
+        });
+
+        // Modal Form Submit (Create or Update Countdown)
+        document.getElementById('countdown-form').addEventListener('submit', (e) => {
+          e.preventDefault();
+          const existingId = document.getElementById('form-countdown-id').value;
+          const title = document.getElementById('input-title').value.trim() || 'Untitled Countdown';
+          const subtitle = document.getElementById('input-subtitle').value.trim();
+          const targetDate = document.getElementById('input-datetime').value;
+          const colors = [
+            document.getElementById('color-stop-1').value,
+            document.getElementById('color-stop-2').value,
+            document.getElementById('color-stop-3').value,
+          ];
+          const angle = Number(document.getElementById('input-gradient-angle').value) || 135;
+          const bpm = Number(document.getElementById('input-bpm').value) || 128;
+          const effectMode = document.getElementById('input-effect-mode').value;
+
+          // Also check if user typed a valid Spotify URL right before clicking save
+          const rawSpInput = document.getElementById('input-spotify-url').value;
+          const parsedSp = parseSpotifyInput(rawSpInput) || modalSpotifySelection;
+
+          const updatedObj = {
+            id: existingId && !existingId.startsWith('shared_') ? existingId : generateId(),
+            title,
+            subtitle,
+            targetDate,
+            gradient: { colors, angle },
+            spotify: parsedSp,
+            bpm,
+            effectMode,
+          };
+
+          const existingIndex = state.countdowns.findIndex((c) => c.id === updatedObj.id);
+          if (existingIndex !== -1) {
+            state.countdowns[existingIndex] = updatedObj;
+            showToast('Countdown updated!', 'success');
+          } else {
+            state.countdowns.unshift(updatedObj);
+            showToast('Countdown created & saved!', 'success');
+          }
+
+          state.activeCountdown = updatedObj;
+          state.isSharedUnsaved = false;
+          state.lastCelebratedId = null;
+          saveCountdownsToStorage();
+
+          // Clear #c= hash if user just created/edited their own local version
+          if (window.location.hash) {
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+          }
+
+          renderActiveCountdown();
+          closeCreatorModal();
+        });
+
+        // Listen for hash changes (e.g., user pastes another shared #c= link)
+        window.addEventListener('hashchange', () => {
+          const shared = decodeCountdownFromHash(window.location.hash);
+          if (shared) {
+            state.activeCountdown = shared;
+            state.isSharedUnsaved = true;
+            renderActiveCountdown();
+            showToast('Loaded shared countdown!', 'info');
+          }
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+      }
+
+      /* -------------------------------------------------------------------
+         13. MAIN 60FPS ANIMATION LOOP & INITIALIZATION
+      ------------------------------------------------------------------- */
+      let lastFrameTime = performance.now();
+      let lastClockTick = 0;
+
+      function mainLoop(now) {
+        const dt = Math.min(0.1, (now - lastFrameTime) / 1000);
+        lastFrameTime = now;
+
+        // Update beat & audio analyzer
+        updateAudioEngine(dt, now);
+
+        // Apply physical beat reaction to DOM elements
+        applyBeatPhysicsToDOM();
+
+        // Render visualizer canvas
+        renderCanvas(dt);
+
+        // Update countdown digits every ~200ms for crisp accuracy
+        if (now - lastClockTick >= 200) {
+          lastClockTick = now;
+          updateCountdownClock();
+        }
+
+        requestAnimationFrame(mainLoop);
+      }
+
+      window.onload = async function () {
+        resizeCanvas();
+        initGradientPresetButtons();
+        await handleSpotifyOAuthCallback();
+        updateSpotifyAuthUI();
+        loadStateFromStorage();
+        bindEvents();
+        renderActiveCountdown();
+        requestAnimationFrame(mainLoop);
+      };
+    })();
+  </script>
+</body>
+</html>
